@@ -46,6 +46,7 @@ osVarSize <- function(
   ruletype, 
   digits = 0,
   acct.name,
+  min.value = 1000,
   ...
 )
 {
@@ -92,6 +93,7 @@ osVarSize <- function(
   
   account <- getAccount(acct.name)
   
+  starting.capital <- as.numeric(account$summary$End.Eq[1, ])
   equity <- as.numeric(account$summary$End.Eq[as.character(timestamp), ])
   
   if (length(equity) == 0)
@@ -106,13 +108,19 @@ osVarSize <- function(
     avail.liq <- equity
   }
   
-  theor.value <- avail.liq
+  theor.value <- equity * .5
   pos.qty <- max(c(0, as.numeric(portfolio.object$symbols[[symbol]]$posPL$Pos.Qty[as.character(timestamp), ])))
   pos.avg.cost <- max(c(0, as.numeric(portfolio.object$symbols[[symbol]]$posPL$Pos.Avg.Cost[as.character(timestamp), ])))
-  pos.value <- pos.qty * pos.avg.cost
+  pos.value <- pos.qty * Cl(mktdata[timestamp, ])
   to.trade.value <- theor.value - pos.value
   to.trade.value <- ifelse(to.trade.value > 0, min(c(avail.liq, to.trade.value)), to.trade.value)
   to.trade.shares <- ifelse(to.trade.value >= 0, floor(to.trade.value / Cl(mktdata[timestamp, ])), floor(to.trade.value / Cl(mktdata[timestamp, ])))
-  orderqty <- to.trade.shares
+  orderqty <- ifelse(abs(to.trade.value) >= min.value, to.trade.shares, 0)
+  
+  if (orderqty != 0)
+  {
+    print(paste(timestamp, pos.qty, symbol, '@', round(pos.avg.cost, 2)))
+  }
+  
   return(orderqty)
 }
