@@ -46,6 +46,7 @@ osVarSize <- function(
   ruletype, 
   digits = 0,
   acct.name,
+  col.name,
   min.value = 1000,
   ...
 )
@@ -108,7 +109,9 @@ osVarSize <- function(
     avail.liq <- equity
   }
   
+  # theor.value <- equity * mktdata[timestamp, col.name]
   theor.value <- equity * .5
+  theor.value <- ifelse(is.na(theor.value), 0, theor.value)
   pos.qty <- max(c(0, as.numeric(portfolio.object$symbols[[symbol]]$posPL$Pos.Qty[as.character(timestamp), ])))
   pos.avg.cost <- max(c(0, as.numeric(portfolio.object$symbols[[symbol]]$posPL$Pos.Avg.Cost[as.character(timestamp), ])))
   pos.value <- pos.qty * Cl(mktdata[timestamp, ])
@@ -116,6 +119,7 @@ osVarSize <- function(
   to.trade.value <- ifelse(to.trade.value > 0, min(c(avail.liq, to.trade.value)), to.trade.value)
   to.trade.shares <- ifelse(to.trade.value >= 0, floor(to.trade.value / Cl(mktdata[timestamp, ])), floor(to.trade.value / Cl(mktdata[timestamp, ])))
   orderqty <- ifelse(abs(to.trade.value) >= min.value, to.trade.shares, 0)
+  orderqty <- ifelse(pos.qty > 0 && orderqty < 0, orderqty * 2, orderqty / 2) # leverage
   
   if (orderqty != 0)
   {

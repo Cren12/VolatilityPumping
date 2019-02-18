@@ -38,20 +38,15 @@ Sys.setenv(TZ = 'UTC')
 # | or connection or expressions directly.
 # +------------------------------------------------------------------
 
+source('GASmean.R')
 source('getSymbolsFromBloomberg.R')
+source('HalfLogSize.R')
 source('osVarSize.R')
-source('VolatilitySlope.R')
 source('WinDoPar.R')
 
 # +------------------------------------------------------------------
 
-Symbols <- c('SPY US Equity',
-             'TLT US Equity',
-             'DIA US Equity',
-             'QQQ US Equity',
-             'GLD US Equity',
-             'XLV US Equity',
-             'XLF US Equity')
+Symbols <- c('TLT')
 
 # +------------------------------------------------------------------
 # | Functions to load and manage Symbols in specified environment. 
@@ -61,10 +56,10 @@ Symbols <- c('SPY US Equity',
 # | return.class.
 # +------------------------------------------------------------------
 
-# getSymbols(Symbols = Symbols,
-#            from = Sys.Date() - 365 * 30)
-getSymbolsFromBloomberg(securities = Symbols,
-                        start.date = Sys.Date() - 365 * 30)
+getSymbols(Symbols = Symbols,
+           from = Sys.Date() - 365 * 30)
+# getSymbolsFromBloomberg(securities = Symbols,
+#                         start.date = Sys.Date() - 365 * 30)
 
 name <- 'Trading'
 currency <- 'USD'
@@ -134,29 +129,32 @@ for(primary_id in Symbols)
 # +------------------------------------------------------------------
 
 add.indicator(strategy = name,
-              name = 'volatility',
-              arguments = list(OHLC = quote(OHLC(mktdata)),
-                               n = 5,
-                               calc = 'yang.zhang'),
-              label = 'sigma.fast',
-              store = TRUE)
-add.indicator(strategy = name,
-              name = 'volatility',
-              arguments = list(OHLC = quote(OHLC(mktdata)),
-                               n = 200,
-                               calc = 'yang.zhang'),
-              label = 'sigma.slow',
+              name = 'WinDoPar',
+              arguments = list(x = quote(Cl(mktdata)),
+                               n = 25,
+                               w = 'exp',
+                               fun = PercRank),
+              label = 'rank',
               store = TRUE)
 
 # +------------------------------------------------------------------
 # | This adds a signal definition to a strategy object.
 # +------------------------------------------------------------------
 
+# add.signal(strategy = name,
+#            name = 'sigCrossover',
+#            arguments = list(data = quote(mktdata),
+#                             columns = c('sigma.fast', 'sigma.slow'),
+#                             relationship = 'gte',
+#                             cross = FALSE),
+#            label = 'rebalance',
+#            store = TRUE)
 add.signal(strategy = name,
-           name = 'sigCrossover',
+           name = 'sigThreshold',
            arguments = list(data = quote(mktdata),
-                            columns = c('sigma.fast', 'sigma.slow'),
+                            column = 'Close',
                             relationship = 'gte',
+                            threshold = 0,
                             cross = FALSE),
            label = 'rebalance',
            store = TRUE)
@@ -176,6 +174,7 @@ add.rule(strategy = name,
                           replace = TRUE,
                           osFUN = osVarSize,
                           acct.name = name,
+                          col.name = 'X1.rank',
                           TxnFees = TxnFees),
          label = 'rebalance.buy',
          type = 'enter',
@@ -190,10 +189,27 @@ add.rule(strategy = name,
                           replace = TRUE,
                           osFUN = osVarSize,
                           acct.name = name,
+                          col.name = 'X1.rank',
                           TxnFees = TxnFees),
          label = 'rebalance.sell',
          type = 'exit',
          store = TRUE)
+# add.rule(strategy = name,
+#          name = 'ruleSignal',
+#          arguments = list(sigcol = 'rebalance',
+#                           sigval = TRUE,
+#                           orderqty = 'all',
+#                           ordertype = 'stoplimit', # stoplimit # stoptrailing
+#                           orderside = 'long',
+#                           orderset = 'stop',
+#                           threshold = quote(-mktdata[timestamp, 'X1.sigma.fast']),
+#                           tmult = TRUE,
+#                           TxnFees = TxnFees,
+#                           prefer = 'Low'),
+#          label = 'rebalance.buy.chain',
+#          type = 'chain',
+#          parent = 'rebalance.buy',
+#          store = TRUE)
 
 # +------------------------------------------------------------------
 # | This function is the wrapper that holds together the execution of
@@ -259,18 +275,18 @@ R$Tot.DailyEqPl <- rowMeans(R)
 account <- getAccount(Account = name)
 
 dev.new()
-plot(cumsum(account$summary$Realized.PL)[cumsum(account$summary$Realized.PL) != 0], main = 'Realized PL')
+plot(cumsum(account$summary$Realized.PL)[cumsum(account$summary$Realized.PL) != 0], main = 'Realized PL', lwd = 1)
 dev.new()
 
 # +------------------------------------------------------------------
-# | Get a portfolio object conssting of either a nested list. 
+# | Get a portfolio object conssting of either a nested list. 43
 # | Portfolios in blotter are stored as a set of nested, hashed,
 # | environments.
 # +------------------------------------------------------------------
 
-portfolio <- getPortfolio(name)
-
-plot(na.omit(merge(Cl(get(Symbols)), portfolio$symbols[[1]]$txn$Pos.Avg.Cost)[-1, ]), main = 'Position average cost vs. security price')
+portfolio <- blotter::getPortfolio(name)
+x <- na.omit(merge(Cl(get(Symbols)), portfolio$symbols[[1]]$txn$Pos.Avg.Cost)[-1, ])
+plot.xts(x, legend.loc = 'topleft', lwd = 1, main = '')
 dev.new()
 
 # +------------------------------------------------------------------
